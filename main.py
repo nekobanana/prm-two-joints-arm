@@ -1,18 +1,35 @@
 import numpy as np
+from shapely import LineString, distance, geometry
 from shapely.geometry import Polygon, Point
 from matplotlib import pyplot as plt
-
-def check_line_polygon_intersection(line, polygon):
-    clip_poly = Polygon([[-9.5, -2], [2, 2], [3, 4], [-1, 3]])
+from shapely.ops import split
 
 
-def w_obstacle_to_c_obstcle(obs, l1, l2):
-    for theta1 in np.linspace(0, 2*np.pi):
-        x1, y1 = get_arm1_position(theta1, l1)
+def w_obstacle_to_c_obstacle(obs, l1, l2):
+    non_admissible_configs = []
+    l1_circle = Point(0, 0).buffer(l1)
+    obs_splitted = split(obs, LineString(((0, 0), (max(obs.exterior.xy[0]), 0))))
+    for idx, o in enumerate(obs_splitted.geoms):
+        l1_intersection_coord = l1_circle.intersection(o).boundary.coords
+        angles = [mod2pi(np.arctan(point[1] / point[0])) for point in l1_intersection_coord]
+        angles.sort()
+        if idx == 0 and len(obs_splitted.geoms) > 0 and angles[0] == 0:
+            angles = [a for a in angles if a != 0]
+            angles.append(2 * np.pi)
+        non_admissible_configs.append([(angles[0], angles[-1])])
+    return non_admissible_configs
+
+
 
 
 def conf_point(theta1, theta2):
-    return Point(np.mod(theta1, 2 * np.pi), np.mod(theta2, 2 * np.pi))
+    return Point(mod2pi(theta1), mod2pi(theta2))
+
+
+def mod2pi(theta):
+    return np.mod(theta, 2 * np.pi)
+
+
 def cartesian_to_config_space(x, y, l1, l2):
     if x > 0:
         config1, config2 = _cartesian_to_config_space_x_pos(x, y, l1, l2)
@@ -90,7 +107,11 @@ def main():
 
     ax_w, ax_c = init_plot(l1, l2)
 
-    obstacle1_cartesian = Polygon([(3, 4), (6, 5), (5, 7)])
+    obstacle1_cartesian = Polygon([(3, -4), (10, -5), (7, 9), (2, 7)])
+    # obstacle1_cartesian = Polygon([(2, 7), (7, 9), (10, 5), (3, 4)])
+    # o1 = Polygon([(3, 4), (10, 5), (7, 9), (2, 7)])
+    # o2 = Polygon([(3, 4), (10, 5), (7, 9), (2, 7)])
+    # o3 = Polygon([(3, 4), (10, 5), (7, 9), (2, 7)])
 
     if not check_arm_reach(x, y, l1, l2):
         print("Point is outside arm length")
@@ -110,6 +131,7 @@ def main():
     #                      for (x_o, y_o) in cartesian_to_config_space_x_pos_sampled]))
 
     plot_arm_in_config_space(ax_c, [config1, config2])
+    w_obstacle_to_c_obstacle(obstacle1_cartesian, l1, l2)
     # plot_in_c_space(ax_c, list(obstacle1_c_space[0]), obstacle=True)
     # plot_in_c_space(ax_c, list(obstacle1_c_space[1]), obstacle=True)
     plt.show()
