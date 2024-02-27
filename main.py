@@ -31,13 +31,12 @@ def mod2pi(c: CPoint):
 
 def plot_arm_in_workspace(ax, alpha, l1, x, y):
     x1, y1 = l1 * np.cos(alpha), l1 * np.sin(alpha)
-    ax.plot([0, x1], [0, y1], linewidth=3)
-    ax.plot([x1, x], [y1, y], linewidth=3)
+    ax.plot([0, x1, x], [0, y1, y], linewidth=3)
 
 
-def plot_obs_in_workspace(ax, WObstacle):
-    points = WObstacle.points
-    points = np.append(points, points[0])
+def plot_obs_in_workspace(ax, obs: WObstacle):
+    points = obs.points
+    points = np.concatenate((points, [points[0]]), axis=0)
     points = points.transpose()
     x = points[0]
     y = points[1]
@@ -61,7 +60,9 @@ def _plot_in_c_space(ax, points: list[CPoint], obstacle=True):
     if obstacle:
         ax.plot(theta1, theta2)
     else:
-        ax.scatter(theta1, theta2, marker="o")
+        for t1, t2 in zip(theta1, theta2):
+            ax.scatter(t1, t2, marker="o")
+
 
 
 def check_arm_reach(x, y, l1, l2):
