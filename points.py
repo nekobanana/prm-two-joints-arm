@@ -21,6 +21,15 @@ class WPoint:
     def y(self, y):
         self.point[1] = y
 
+class WObstacle:
+    def __init__(self, points: list[tuple | WPoint] | np.ndarray):
+        if type(points) is np.ndarray:
+            self.points = points
+        elif type(points) is list[WPoint]:
+            self.points = np.array(((p.x, p.y) for p in points))
+        else:
+            self.points = np.array(points)
+
 
 class CPoint:
     def __init__(self, theta1, theta2):
@@ -41,3 +50,11 @@ class CPoint:
     @theta2.setter
     def theta2(self, theta2):
         self.point[1] = theta2
+class CObstacle:
+    def __init__(self, points: list[tuple | CPoint] | np.ndarray):
+        if type(points) is np.ndarray:
+            self.points = points
+        elif type(points) is list:
+            self.points = np.array(((p.theta1, p.theta2) for p in points))
+        else:
+            self.points = np.array(points)
