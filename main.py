@@ -1,17 +1,26 @@
 import numpy as np
+from shapely.geometry import Polygon, Point
 from matplotlib import pyplot as plt
 
-from points import CPoint, WPoint, WObstacle
+def check_line_polygon_intersection(line, polygon):
+    clip_poly = Polygon([[-9.5, -2], [2, 2], [3, 4], [-1, 3]])
 
 
+def w_obstacle_to_c_obstcle(obs, l1, l2):
+    for theta1 in np.linspace(0, 2*np.pi):
+        x1, y1 = get_arm1_position(theta1, l1)
+
+
+def conf_point(theta1, theta2):
+    return Point(np.mod(theta1, 2 * np.pi), np.mod(theta2, 2 * np.pi))
 def cartesian_to_config_space(x, y, l1, l2):
     if x > 0:
         config1, config2 = _cartesian_to_config_space_x_pos(x, y, l1, l2)
     else:
         config1, config2 = _cartesian_to_config_space_x_pos(-x, y, l1, l2)
-        config1.point = np.pi - config1.point
-        config2.point = np.pi - config2.point
-    return mod2pi(config1), mod2pi(config2)
+        config1 = conf_point(*(np.pi - np.array([config1.x, config1.y])))
+        config2 = conf_point(*(np.pi - np.array([config2.x, config2.y])))
+    return config1, config2
 
 
 def _cartesian_to_config_space_x_pos(x, y, l1, l2):
@@ -21,48 +30,29 @@ def _cartesian_to_config_space_x_pos(x, y, l1, l2):
     theta1_pos = np.arctan(y / x) - np.arctan((l2 * np.sin(theta2_pos)) / (l1 + l2 * np.cos(theta2_pos)))
     theta1_neg = np.arctan(y / x) + np.arctan(
         (l2 * np.sin(theta2_pos)) / (l1 + l2 * np.cos(theta2_pos)))  # non dovrebbe essere theta2_neg in questa formula?
-    return CPoint(theta1_pos, theta2_pos), CPoint(theta1_neg, theta2_neg)
+    return conf_point(theta1_pos, theta2_pos), conf_point(theta1_neg, theta2_neg)
 
-
-def mod2pi(c: CPoint):
-    c.point = np.mod(c.point, 2 * np.pi)
-    return c
-
-
-def plot_arm_in_workspace(ax, alpha, l1, x, y):
-    x1, y1 = l1 * np.cos(alpha), l1 * np.sin(alpha)
+def plot_arm_in_workspace(ax, theta1, l1, x, y):
+    x1, y1 = get_arm1_position(theta1, l1)
     ax.plot([0, x1, x], [0, y1, y], linewidth=3)
 
 
-def plot_obs_in_workspace(ax, obs: WObstacle):
-    points = obs.points
-    points = np.concatenate((points, [points[0]]), axis=0)
-    points = points.transpose()
-    x = points[0]
-    y = points[1]
-    ax.plot(x, y)
+def get_arm1_position(theta1, l1):
+    x1, y1 = l1 * np.cos(theta1), l1 * np.sin(theta1)
+    return x1, y1
 
 
-def plot_arm_in_config_space(ax, points: list[CPoint] | CPoint):
-    p = points if type(points) is list else [points]
-    _plot_in_c_space(ax, p, obstacle=False)
+def plot_obs_in_workspace(ax, obs):
+    ax.plot(*obs.exterior.xy)
 
 
-def plot_obs_in_config_space(ax, points: list | CPoint):
-    p = points if type(points) is list[CPoint] else [points]
-    _plot_in_c_space(ax, p, obstacle=True)
+def plot_arm_in_config_space(ax, points):
+    for p in points:
+        ax.scatter(p.x, p.y)
 
 
-def _plot_in_c_space(ax, points: list[CPoint], obstacle=True):
-    if obstacle:
-        points.append(points[0])
-    theta1, theta2 = zip(*[(p.theta1, p.theta2) for p in points])
-    if obstacle:
-        ax.plot(theta1, theta2)
-    else:
-        for t1, t2 in zip(theta1, theta2):
-            ax.scatter(t1, t2, marker="o")
-
+def plot_obs_in_config_space(ax, obs):
+    ax.plot(*obs.exterior.xy)
 
 
 def check_arm_reach(x, y, l1, l2):
@@ -94,20 +84,20 @@ def init_plot(l1, l2):
 
 def main():
     x = -2
-    y = 5
+    y = 18
     l1 = 10
     l2 = 10
 
     ax_w, ax_c = init_plot(l1, l2)
 
-    obstacle1_cartesian = WObstacle([(3, 4), (6, 5), (5, 7)])
+    obstacle1_cartesian = Polygon([(3, 4), (6, 5), (5, 7)])
 
     if not check_arm_reach(x, y, l1, l2):
         print("Point is outside arm length")
         return
     config1, config2 = cartesian_to_config_space(x, y, l1, l2)
-    plot_arm_in_workspace(ax_w, config1.theta1, l1, x, y)
-    plot_arm_in_workspace(ax_w, config2.theta1, l1, x, y)
+    plot_arm_in_workspace(ax_w, config1.x, l1, x, y)
+    plot_arm_in_workspace(ax_w, config2.x, l1, x, y)
     plot_obs_in_workspace(ax_w, obstacle1_cartesian)
     # cartesian_to_config_space_x_pos_sampled = []
     # obstacle1_cartesian_tmp = obstacle1_cartesian.copy()
