@@ -1,11 +1,43 @@
 import numpy as np
-from shapely import LineString, distance, geometry
+from shapely import LineString, distance, geometry, normalize, union_all, MultiPolygon, box
 from shapely.geometry import Polygon, Point
 from matplotlib import pyplot as plt
 from shapely.ops import split
 
 
 def w_obstacle_to_c_obstacle(obs, l1, l2):
+    non_admissible_configs_arm1 = calc_non_admissible_configs_arm1(obs, l1)
+    non_admissible_configs_arm2 = calc_non_admissible_configs_arm2(obs, l1, l2)
+    non_admissible_configs_shapes = []
+    for theta1_interval in non_admissible_configs_arm1:
+        shape = Polygon(((theta1_interval[0], 0), (theta1_interval[1], 0),
+                    (theta1_interval[1], 2 * np.pi), (theta1_interval[0], 2 * np.pi)))
+        non_admissible_configs_shapes.append(shape)
+    for pol in non_admissible_configs_arm2:
+        shape_splitted = split(Polygon(pol), box(0, 0, 2 * np.pi, 2 * np.pi).boundary)
+        shape_splitted_c = []
+        for g in shape_splitted.geoms:
+            x = g.boundary.xy[0]
+            y = g.boundary.xy[1]
+            x_neg, x_big = min(x) < 0, max(x) > 2*np.pi
+            y_neg, y_big = min(y) < 0, max(y) > 2*np.pi
+            if x_big:
+                x = [mod2pi(n) for n in x if n != 2*np.pi]
+            if x_neg:
+                x = [mod2pi(n) for n in x if n != 0]
+            if y_big:
+                y = [mod2pi(n) for n in y if n != 2 * np.pi]
+            if y_neg:
+                y = [mod2pi(n) for n in y if n != 0]
+            shape_splitted_c.append(Polygon(zip(x, y)))
+        # shape_splitted_c = [Polygon([conf_point(p[0], p[1]) for p in g.boundary.coords]) for g in shape_splitted.geoms]
+        non_admissible_configs_shapes.extend(shape_splitted_c)
+    non_admissible_configs = MultiPolygon(non_admissible_configs_shapes)
+    # non_admissible_configs = normalize(union_all(non_admissible_configs_shapes)).boundary
+    return non_admissible_configs_shapes
+
+
+def calc_non_admissible_configs_arm1(obs, l1):
     non_admissible_configs = []
     l1_circle = Point(0, 0).buffer(l1)
     obs_splitted = split(obs, LineString(((0, 0), (max(obs.exterior.xy[0]), 0))))
@@ -16,11 +48,20 @@ def w_obstacle_to_c_obstacle(obs, l1, l2):
         if idx == 0 and len(obs_splitted.geoms) > 0 and angles[0] == 0:
             angles = [a for a in angles if a != 0]
             angles.append(2 * np.pi)
-        non_admissible_configs.append([(angles[0], angles[-1])])
+        non_admissible_configs.append((angles[0], angles[-1]))
     return non_admissible_configs
 
-
-
+def calc_non_admissible_configs_arm2(obs, l1, l2):
+    cartesian_to_config_space_x_pos_sampled = []
+    obstacle1_cartesian_tmp = list(obs.exterior.coords)
+    obstacle1_cartesian_tmp.append(obstacle1_cartesian_tmp[0])
+    for i in range(len(obstacle1_cartesian_tmp) - 1):
+        sampled_points = zip(np.linspace(obstacle1_cartesian_tmp[i][0], obstacle1_cartesian_tmp[i + 1][0]),
+                          np.linspace(obstacle1_cartesian_tmp[i][1], obstacle1_cartesian_tmp[i + 1][1]))
+        cartesian_to_config_space_x_pos_sampled += sampled_points
+    obstacle1_c_space = list(zip(*[cartesian_to_config_space(x_o, y_o, l1, l2)
+                         for (x_o, y_o) in cartesian_to_config_space_x_pos_sampled]))
+    return obstacle1_c_space
 
 def conf_point(theta1, theta2):
     return Point(mod2pi(theta1), mod2pi(theta2))
@@ -35,9 +76,9 @@ def cartesian_to_config_space(x, y, l1, l2):
         config1, config2 = _cartesian_to_config_space_x_pos(x, y, l1, l2)
     else:
         config1, config2 = _cartesian_to_config_space_x_pos(-x, y, l1, l2)
-        config1 = conf_point(*(np.pi - np.array([config1.x, config1.y])))
-        config2 = conf_point(*(np.pi - np.array([config2.x, config2.y])))
-    return config1, config2
+        config1 = np.pi - np.array([config1.x, config1.y])
+        config2 = np.pi - np.array([config2.x, config2.y])
+    return Point(config1), Point(config2)
 
 
 def _cartesian_to_config_space_x_pos(x, y, l1, l2):
@@ -47,7 +88,7 @@ def _cartesian_to_config_space_x_pos(x, y, l1, l2):
     theta1_pos = np.arctan(y / x) - np.arctan((l2 * np.sin(theta2_pos)) / (l1 + l2 * np.cos(theta2_pos)))
     theta1_neg = np.arctan(y / x) + np.arctan(
         (l2 * np.sin(theta2_pos)) / (l1 + l2 * np.cos(theta2_pos)))  # non dovrebbe essere theta2_neg in questa formula?
-    return conf_point(theta1_pos, theta2_pos), conf_point(theta1_neg, theta2_neg)
+    return Point(theta1_pos, theta2_pos), Point(theta1_neg, theta2_neg)
 
 def plot_arm_in_workspace(ax, theta1, l1, x, y):
     x1, y1 = get_arm1_position(theta1, l1)
@@ -117,21 +158,16 @@ def main():
         print("Point is outside arm length")
         return
     config1, config2 = cartesian_to_config_space(x, y, l1, l2)
+    config1 = conf_point(config1.x, config1.y)
+    config2 = conf_point(config2.x, config2.y)
     plot_arm_in_workspace(ax_w, config1.x, l1, x, y)
     plot_arm_in_workspace(ax_w, config2.x, l1, x, y)
     plot_obs_in_workspace(ax_w, obstacle1_cartesian)
-    # cartesian_to_config_space_x_pos_sampled = []
-    # obstacle1_cartesian_tmp = obstacle1_cartesian.copy()
-    # obstacle1_cartesian_tmp.append(obstacle1_cartesian_tmp[0])
-    # for i in range(len(obstacle1_cartesian_tmp) - 1):
-    #     sampled_points = zip(np.linspace(obstacle1_cartesian_tmp[i][0], obstacle1_cartesian_tmp[i + 1][0]),
-    #                       np.linspace(obstacle1_cartesian_tmp[i][1], obstacle1_cartesian_tmp[i + 1][1]))
-    #     cartesian_to_config_space_x_pos_sampled += sampled_points
-    # obstacle1_c_space = tuple(zip(*[cartesian_to_config_space(x_o, y_o, l1, l2)
-    #                      for (x_o, y_o) in cartesian_to_config_space_x_pos_sampled]))
 
     plot_arm_in_config_space(ax_c, [config1, config2])
-    w_obstacle_to_c_obstacle(obstacle1_cartesian, l1, l2)
+    non_admissible_configs_shapes = w_obstacle_to_c_obstacle(obstacle1_cartesian, l1, l2)
+    for o in non_admissible_configs_shapes:
+        plot_obs_in_workspace(ax_c, o)
     # plot_in_c_space(ax_c, list(obstacle1_c_space[0]), obstacle=True)
     # plot_in_c_space(ax_c, list(obstacle1_c_space[1]), obstacle=True)
     plt.show()
