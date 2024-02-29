@@ -1,5 +1,5 @@
 import numpy as np
-from shapely import LineString, distance, geometry, normalize, union_all, MultiPolygon, box
+from shapely import LineString, distance, geometry, normalize, union_all, MultiPolygon, box, GeometryCollection
 from shapely.geometry import Polygon, Point
 from matplotlib import pyplot as plt
 from shapely.ops import split
@@ -14,7 +14,11 @@ def w_obstacle_to_c_obstacle(obs, l1, l2):
                          (theta1_interval[1], 2 * np.pi), (theta1_interval[0], 2 * np.pi)))
         na_configs_arm.append(shape)
     for pol in non_admissible_configs_arm2:
-        shape_splitted = split(pol, box(0, 0, 2 * np.pi, 2 * np.pi).boundary)
+        shape_splitted = GeometryCollection()
+        try:
+            shape_splitted = split(pol, box(0, 0, 2 * np.pi, 2 * np.pi).boundary)
+        except ValueError:
+            pass
         shape_splitted_c = []
         for g in shape_splitted.geoms:
             if g.is_empty:
@@ -41,22 +45,17 @@ def w_obstacle_to_c_obstacle(obs, l1, l2):
 
 
 def calc_non_admissible_configs_arm1(obs, l1):
-    return calc_non_admissible_configs_arm(obs, 0, 0, l1)
+    return calc_non_admissible_configs_arm(obs, 0, 0, l1, 0)
 
 
-def calc_non_admissible_configs_arm(obs, center_x, center_y, l):
+def calc_non_admissible_configs_arm(obs, center_x, center_y, l, previous_theta):
     non_admissible_configs = []
-    previous_theta = 0
-    previous_l = 0
-    if center_x != 0:
-        previous_theta = np.arctan(center_y / center_x)
-        # previous_l = np.sqrt(center_x ** 2 + center_y ** 2)
-        transl_coords = np.array(obs.exterior.coords) - np.array([center_x, center_y])
-        rot_matrix = np.array(
-            [[np.cos(previous_theta), np.sin(previous_theta)],
-             [-np.sin(previous_theta), np.cos(previous_theta)]])
-        trasf_coords = np.matmul(rot_matrix, transl_coords.transpose()).transpose()
-        obs = Polygon(trasf_coords)
+    transl_coords = np.array(obs.exterior.coords) - np.array([center_x, center_y])
+    rot_matrix = np.array(
+        [[np.cos(previous_theta), np.sin(previous_theta)],
+         [-np.sin(previous_theta), np.cos(previous_theta)]])
+    trasf_coords = np.matmul(rot_matrix, transl_coords.transpose()).transpose()
+    obs = Polygon(trasf_coords)
     splitter = LineString(((0, 0), (max(obs.exterior.xy[0]), 0)))
     l_circle = Point(0, 0).buffer(l)
     obs_splitted = split(obs, splitter)
@@ -65,7 +64,13 @@ def calc_non_admissible_configs_arm(obs, center_x, center_y, l):
         if intersection.is_empty:
             continue
         l_intersection_coord = intersection.boundary.coords
-        angles = [mod2pi(np.arctan(point[1] / point[0])) for point in l_intersection_coord]
+        angles = []
+        for point in l_intersection_coord:
+            angle = np.arctan(point[1] / point[0])
+            if point[0] < 0:
+                angle = angle + np.pi
+            angles.append(mod2pi(angle))
+        # angles = [mod2pi(np.arctan(point[1] / point[0])) if point[0] > 0 else mod2pi(np.arctan(point[1] / point[0]) + np.pi) for point in l_intersection_coord]
         angles.sort()
         if angles[0] == 0:
             angles_no_0 = [a for a in angles if a != 0]
@@ -87,6 +92,8 @@ def calc_non_admissible_configs_arm2(obs, l1, l2, non_admissible_configs_arm1):
         admissible_theta1 = [(na_t1[1], na_t1[2])]
     elif len(non_admissible_configs_arm1) == 1:
         admissible_theta1 = [(na_t1[0], na_t1[1])]
+    elif len(non_admissible_configs_arm1) == 0:
+        admissible_theta1 = [(0, 2 * np.pi)]
     non_admissible_configs_arm2 = []
     polygons = []
 
@@ -94,7 +101,7 @@ def calc_non_admissible_configs_arm2(obs, l1, l2, non_admissible_configs_arm1):
         for theta1 in np.linspace(theta1_interval[0], theta1_interval[1]):
             center_x = l1 * np.cos(theta1)
             center_y = l1 * np.sin(theta1)
-            intervals_theta2 = calc_non_admissible_configs_arm(obs, center_x, center_y, l2)
+            intervals_theta2 = calc_non_admissible_configs_arm(obs, center_x, center_y, l2, theta1)
             polygons.extend([LineString([(theta1, inter[0]), (theta1, inter[1])]) for inter in intervals_theta2])
     # for s in non_admissible_configs_arm2:
     #     p_a = [(i[0], i[1][0]) for i in s]
@@ -126,7 +133,8 @@ def _cartesian_to_config_space_x_pos(x, y, l1, l2):
     cos_theta2 = (x ** 2 + y ** 2 - l1 ** 2 - l2 ** 2) / (2 * l1 * l2)
     theta2_pos = np.arccos(cos_theta2)
     theta2_neg = -theta2_pos
-    theta1_pos = np.arctan(y / x) - np.arctan((l2 * np.sin(theta2_pos)) / (l1 + l2 * np.cos(theta2_pos)))
+    theta1_pos = np.arctan(y / x) - np.arctan(
+        (l2 * np.sin(theta2_pos)) / (l1 + l2 * np.cos(theta2_pos)))
     theta1_neg = np.arctan(y / x) + np.arctan(
         (l2 * np.sin(theta2_pos)) / (l1 + l2 * np.cos(theta2_pos)))  # non dovrebbe essere theta2_neg in questa formula?
     return Point(theta1_pos, theta2_pos), Point(theta1_neg, theta2_neg)
@@ -161,7 +169,18 @@ def plot_obs_in_config_space(ax, obs):
 def check_arm_reach(x, y, l1, l2):
     return (x ** 2 + y ** 2) <= (l1 + l2) ** 2
 
-
+def debug_plot(l, obs):
+    fig, ax = plt.subplots(1, 1)
+    ax_limit = l
+    ax.set_aspect('equal', adjustable='box')
+    ax.axhline(y=0, color='k', linewidth=1)
+    ax.axvline(x=0, color='k', linewidth=1)
+    ax.set(xlim=(-ax_limit, ax_limit), ylim=(-ax_limit, ax_limit))
+    ax.set_title("Transofrmed workspace")
+    ax.set_xlabel("x")
+    ax.set_ylabel("y")
+    plot_obs_in_workspace(ax, obs)
+    plt.show()
 def init_plot(l1, l2):
     fig, (ax1, ax2) = plt.subplots(1, 2)
     ax1_limit = l1 + l2
@@ -186,18 +205,17 @@ def init_plot(l1, l2):
 
 
 def main():
-    x = -2
-    y = 18
+    x = 3
+    y = 7
     l1 = 10
     l2 = 10
 
     ax_w, ax_c = init_plot(l1, l2)
 
-    obstacle1_cartesian = Polygon([(3, -4), (11, -5), (7, 9), (2, 7)])
+    # obstacle1_cartesian = Polygon([(8, 15), (10, 15), (10, 18)])
+    obstacle2_cartesian = Polygon([(3, -4), (11, -5), (7, 9), (2, 7)])
     # obstacle1_cartesian = Polygon([(2, 7), (7, 9), (10, 5), (3, 4)])
-    # o1 = Polygon([(3, 4), (10, 5), (7, 9), (2, 7)])
-    # o2 = Polygon([(3, 4), (10, 5), (7, 9), (2, 7)])
-    # o3 = Polygon([(3, 4), (10, 5), (7, 9), (2, 7)])
+
 
     if not check_arm_reach(x, y, l1, l2):
         print("Point is outside arm length")
@@ -207,10 +225,13 @@ def main():
     config2 = conf_point(config2.x, config2.y)
     plot_arm_in_workspace(ax_w, config1.x, l1, x, y)
     plot_arm_in_workspace(ax_w, config2.x, l1, x, y)
-    plot_obs_in_workspace(ax_w, obstacle1_cartesian)
+    # plot_obs_in_workspace(ax_w, obstacle1_cartesian)
+    plot_obs_in_workspace(ax_w, obstacle2_cartesian)
 
     plot_arm_in_config_space(ax_c, [config1, config2])
-    non_admissible_configs_shapes = w_obstacle_to_c_obstacle(obstacle1_cartesian, l1, l2)
+    non_admissible_configs_shapes = []
+    # non_admissible_configs_shapes.extend(w_obstacle_to_c_obstacle(obstacle1_cartesian, l1, l2))
+    non_admissible_configs_shapes.extend(w_obstacle_to_c_obstacle(obstacle2_cartesian, l1, l2))
     for o in non_admissible_configs_shapes:
         plot_obs_in_workspace(ax_c, o)
     # plot_in_c_space(ax_c, list(obstacle1_c_space[0]), obstacle=True)
