@@ -1,4 +1,7 @@
 import numpy as np
+from matplotlib.collections import PatchCollection
+from matplotlib.patches import PathPatch
+from matplotlib.path import Path
 from shapely import LineString, distance, geometry, normalize, union_all, MultiPolygon, box, GeometryCollection, \
     LinearRing
 from shapely.geometry import Polygon, Point
@@ -10,7 +13,7 @@ def w_obstacle_to_c_obstacle(obs, l1, l2):
     non_admissible_configs_arm1 = calc_non_admissible_configs_arm1(obs, l1)
     non_admissible_configs_arm2 = calc_non_admissible_configs_arm2(obs, l1, l2, non_admissible_configs_arm1)
     na_configs_arm = []
-    for theta1_interval in [*non_admissible_configs_arm1.values()]:
+    for theta1_interval in [*non_admissible_configs_arm1["neg"], *non_admissible_configs_arm1["pos"]]:
         if len(theta1_interval) == 0:
             continue
         shape = Polygon(((theta1_interval[0], 0), (theta1_interval[1], 0),
@@ -39,7 +42,7 @@ def w_obstacle_to_c_obstacle(obs, l1, l2):
             if y_neg:
                 y = [mod2pi(n) for n in y if n != 0]
             # shape_splitted_c.append(Polygon(zip(x, y)))
-            shape_splitted_c.append(LineString(zip(x, y)))
+            shape_splitted_c.append(Polygon(zip(x, y)))
         na_configs_arm.extend(shape_splitted_c)
     # non_admissible_configs = MultiPolygon(na_configs_arm1)
     return na_configs_arm
@@ -88,14 +91,14 @@ def calc_non_admissible_configs_arm(obs, center_x, center_y, l, previous_theta):
 
 def calc_non_admissible_configs_arm2(obs, l1, l2, non_admissible_configs_arm1):
     admissible_theta1 = []
-    na_t1 = [x for xs in non_admissible_configs_arm1.values() for x in xs]
+    na_t1 = [*non_admissible_configs_arm1["neg"], *non_admissible_configs_arm1["pos"]]
     na_t1.sort()
     if len(non_admissible_configs_arm1["neg"]) > 0 and len(non_admissible_configs_arm1["pos"]) > 0:
-        admissible_theta1 = [(na_t1[1], na_t1[2])]
+        admissible_theta1 = [(na_t1[0][1], na_t1[1][0])]
     elif len(non_admissible_configs_arm1["neg"]) == 0 and len(non_admissible_configs_arm1["pos"]) == 0:
         admissible_theta1 = [(0, 2 * np.pi)]
     else:
-        admissible_theta1 = [(na_t1[0], na_t1[1])]
+        admissible_theta1 = [(na_t1[0][0], na_t1[0][1])]
     lines = []
     for theta1_interval in admissible_theta1:
         # l = {"neg":[], "pos":[]}
@@ -106,11 +109,13 @@ def calc_non_admissible_configs_arm2(obs, l1, l2, non_admissible_configs_arm1):
             center_y = l1 * np.sin(theta1)
             intervals_theta2 = calc_non_admissible_configs_arm(obs, center_x, center_y, l2, theta1)
             if len(intervals_theta2["neg"]) > 0:
-                l["neg"][0].append((theta1, intervals_theta2["neg"][0][0]))
-                l["neg"][1].append((theta1, intervals_theta2["neg"][0][1]))
+                for interval in intervals_theta2["neg"]:
+                    l["neg"][0].append((theta1, interval[0]))
+                    l["neg"][1].append((theta1, interval[1]))
             if len(intervals_theta2["pos"]) > 0:
-                l["pos"][0].append((theta1, intervals_theta2["pos"][0][0]))
-                l["pos"][1].append((theta1, intervals_theta2["pos"][0][1]))
+                for interval in intervals_theta2["pos"]:
+                    l["pos"][0].append((theta1, interval[0]))
+                    l["pos"][1].append((theta1, interval[1]))
             pass
             # polygons.extend([LineString([(theta1, inter[0]), (theta1, inter[1])]) for inter in intervals_theta2])
         lines.append(l)
@@ -119,6 +124,8 @@ def calc_non_admissible_configs_arm2(obs, l1, l2, non_admissible_configs_arm1):
         for (k, v) in l.items():
             fig = {"l": [], "r": []}
             for idx, points in enumerate(v):
+                if len(points) == 0:
+                    continue
                 p_it = iter(points)
                 p1 = next(p_it)
                 d_1 = np.inf
@@ -136,8 +143,10 @@ def calc_non_admissible_configs_arm2(obs, l1, l2, non_admissible_configs_arm1):
                     p_list_r = list(reversed(p_list_r))
                 fig["l"].extend(p_list_l)
                 fig["r"].extend(p_list_r)
-            linestrings.append(Polygon(fig["l"]))
-            linestrings.append(Polygon(fig["r"]))
+            if len(fig["l"]) > 2:
+                linestrings.append(Polygon(fig["l"]))
+            if len(fig["r"]) > 2:
+                linestrings.append(Polygon(fig["r"]))
 
     # linestrings.extend([LineString(line["neg"][0]) for line in lines])
     # linestrings.extend([LineString(line["neg"][1]) for line in lines])
@@ -239,6 +248,18 @@ def init_plot(l1, l2):
     return ax1, ax2
 
 
+# Plots a Polygon to pyplot `ax`
+def plot_polygon(ax, poly, **kwargs):
+    path = Path.make_compound_path(
+        Path(np.asarray(poly.exterior.coords)[:, :2]),
+        *[Path(np.asarray(ring.coords)[:, :2]) for ring in poly.interiors])
+
+    patch = PathPatch(path, **kwargs)
+    collection = PatchCollection([patch], **kwargs)
+
+    ax.add_collection(collection, autolim=True)
+    ax.autoscale_view()
+    return collection
 def main():
     x = 3
     y = 7
@@ -247,9 +268,9 @@ def main():
 
     ax_w, ax_c = init_plot(l1, l2)
 
-    # obstacle1_cartesian = Polygon([(8, 15), (10, 15), (10, 18)])
+    obstacle1_cartesian = Polygon([(8, 15), (10, 15), (10, 18)])
     obstacle2_cartesian = Polygon([(13, -4), (21, -5), (17, 9), (12, 7)])
-    # obstacle1_cartesian = Polygon([(2, 7), (7, 9), (10, 5), (3, 4)])
+    obstacle3_cartesian = Polygon([(2, 7), (7, 9), (10, -5), (3, -4)])
 
 
     if not check_arm_reach(x, y, l1, l2):
@@ -260,17 +281,17 @@ def main():
     config2 = conf_point(config2.x, config2.y)
     plot_arm_in_workspace(ax_w, config1.x, l1, x, y)
     plot_arm_in_workspace(ax_w, config2.x, l1, x, y)
-    # plot_obs_in_workspace(ax_w, obstacle1_cartesian)
+    plot_obs_in_workspace(ax_w, obstacle1_cartesian)
     plot_obs_in_workspace(ax_w, obstacle2_cartesian)
+    plot_obs_in_workspace(ax_w, obstacle3_cartesian)
 
     plot_arm_in_config_space(ax_c, [config1, config2])
     non_admissible_configs_shapes = []
     # non_admissible_configs_shapes.extend(w_obstacle_to_c_obstacle(obstacle1_cartesian, l1, l2))
-    non_admissible_configs_shapes.extend(w_obstacle_to_c_obstacle(obstacle2_cartesian, l1, l2))
+    # non_admissible_configs_shapes.extend(w_obstacle_to_c_obstacle(obstacle2_cartesian, l1, l2))
+    non_admissible_configs_shapes.extend(w_obstacle_to_c_obstacle(obstacle3_cartesian, l1, l2))
     for o in non_admissible_configs_shapes:
-        plot_obs_in_workspace(ax_c, o)
-    # plot_in_c_space(ax_c, list(obstacle1_c_space[0]), obstacle=True)
-    # plot_in_c_space(ax_c, list(obstacle1_c_space[1]), obstacle=True)
+        plot_polygon(ax_c, o, facecolor='lightblue', edgecolor='red')
     plt.show()
 
 
