@@ -1,5 +1,6 @@
 import numpy as np
-from shapely import LineString, distance, geometry, normalize, union_all, MultiPolygon, box, GeometryCollection
+from shapely import LineString, distance, geometry, normalize, union_all, MultiPolygon, box, GeometryCollection, \
+    LinearRing
 from shapely.geometry import Polygon, Point
 from matplotlib import pyplot as plt
 from shapely.ops import split
@@ -9,12 +10,14 @@ def w_obstacle_to_c_obstacle(obs, l1, l2):
     non_admissible_configs_arm1 = calc_non_admissible_configs_arm1(obs, l1)
     non_admissible_configs_arm2 = calc_non_admissible_configs_arm2(obs, l1, l2, non_admissible_configs_arm1)
     na_configs_arm = []
-    for theta1_interval in non_admissible_configs_arm1:
+    for theta1_interval in [*non_admissible_configs_arm1.values()]:
+        if len(theta1_interval) == 0:
+            continue
         shape = Polygon(((theta1_interval[0], 0), (theta1_interval[1], 0),
                          (theta1_interval[1], 2 * np.pi), (theta1_interval[0], 2 * np.pi)))
         na_configs_arm.append(shape)
     for pol in non_admissible_configs_arm2:
-        shape_splitted = GeometryCollection()
+        shape_splitted = GeometryCollection(pol)
         try:
             shape_splitted = split(pol, box(0, 0, 2 * np.pi, 2 * np.pi).boundary)
         except ValueError:
@@ -23,10 +26,8 @@ def w_obstacle_to_c_obstacle(obs, l1, l2):
         for g in shape_splitted.geoms:
             if g.is_empty:
                 continue
-            # x = g.boundary.xy[0]
-            # y = g.boundary.xy[1]
-            x = g.xy[0]
-            y = g.xy[1]
+            x = g.exterior.xy[0]
+            y = g.exterior.xy[1]
             x_neg, x_big = min(x) < 0, max(x) > 2 * np.pi
             y_neg, y_big = min(y) < 0, max(y) > 2 * np.pi
             if x_big:
@@ -49,7 +50,7 @@ def calc_non_admissible_configs_arm1(obs, l1):
 
 
 def calc_non_admissible_configs_arm(obs, center_x, center_y, l, previous_theta):
-    non_admissible_configs = []
+    non_admissible_configs = {"neg":[], "pos":[]}
     transl_coords = np.array(obs.exterior.coords) - np.array([center_x, center_y])
     rot_matrix = np.array(
         [[np.cos(previous_theta), np.sin(previous_theta)],
@@ -77,38 +78,72 @@ def calc_non_admissible_configs_arm(obs, center_x, center_y, l, previous_theta):
             if 2 * np.pi - angles_no_0[-1] < angles_no_0[0]:
                 angles = angles_no_0
                 angles.append(2 * np.pi)
-        # if idx == 0 and len(obs_splitted.geoms) > 0 and angles[0] == 0:
-        #     angles = [a for a in angles if a != 0]
-        #     angles.append(2 * np.pi)
-        non_admissible_configs.append((angles[0], angles[-1]))
+        if min(o.boundary.xy[1]) < 0:
+            key = "neg"
+        else:
+            key = "pos"
+        non_admissible_configs[key].append((angles[0], angles[-1]))
     return non_admissible_configs
 
 
 def calc_non_admissible_configs_arm2(obs, l1, l2, non_admissible_configs_arm1):
     admissible_theta1 = []
-    na_t1 = [x for xs in non_admissible_configs_arm1 for x in xs]
+    na_t1 = [x for xs in non_admissible_configs_arm1.values() for x in xs]
     na_t1.sort()
-    if len(non_admissible_configs_arm1) == 2:
+    if len(non_admissible_configs_arm1["neg"]) > 0 and len(non_admissible_configs_arm1["pos"]) > 0:
         admissible_theta1 = [(na_t1[1], na_t1[2])]
-    elif len(non_admissible_configs_arm1) == 1:
-        admissible_theta1 = [(na_t1[0], na_t1[1])]
-    elif len(non_admissible_configs_arm1) == 0:
+    elif len(non_admissible_configs_arm1["neg"]) == 0 and len(non_admissible_configs_arm1["pos"]) == 0:
         admissible_theta1 = [(0, 2 * np.pi)]
-    non_admissible_configs_arm2 = []
-    polygons = []
-
+    else:
+        admissible_theta1 = [(na_t1[0], na_t1[1])]
+    lines = []
     for theta1_interval in admissible_theta1:
+        # l = {"neg":[], "pos":[]}
+        l = {"neg": ([], []),
+             "pos": ([], [])}
         for theta1 in np.linspace(theta1_interval[0], theta1_interval[1]):
             center_x = l1 * np.cos(theta1)
             center_y = l1 * np.sin(theta1)
             intervals_theta2 = calc_non_admissible_configs_arm(obs, center_x, center_y, l2, theta1)
-            polygons.extend([LineString([(theta1, inter[0]), (theta1, inter[1])]) for inter in intervals_theta2])
-    # for s in non_admissible_configs_arm2:
-    #     p_a = [(i[0], i[1][0]) for i in s]
-    #     p_b = [(i[0], i[1][1]) for i in s]
-    #     polygons.append(Polygon(p_a))
-    #     polygons.append(Polygon(p_b))
-    return polygons
+            if len(intervals_theta2["neg"]) > 0:
+                l["neg"][0].append((theta1, intervals_theta2["neg"][0][0]))
+                l["neg"][1].append((theta1, intervals_theta2["neg"][0][1]))
+            if len(intervals_theta2["pos"]) > 0:
+                l["pos"][0].append((theta1, intervals_theta2["pos"][0][0]))
+                l["pos"][1].append((theta1, intervals_theta2["pos"][0][1]))
+            pass
+            # polygons.extend([LineString([(theta1, inter[0]), (theta1, inter[1])]) for inter in intervals_theta2])
+        lines.append(l)
+    linestrings = []
+    for l in lines:
+        for (k, v) in l.items():
+            fig = {"l": [], "r": []}
+            for idx, points in enumerate(v):
+                p_it = iter(points)
+                p1 = next(p_it)
+                d_1 = np.inf
+                i = 0
+                for i, p2 in enumerate(p_it):
+                    d_2 = np.linalg.norm(np.array(p2) - np.array(p1))
+                    if d_2 > 3 * d_1: # numero a caso
+                        break
+                    d_1 = d_2
+                    p1 = p2
+                p_list_l = points[:i+1]
+                p_list_r = points[i+1:]
+                if idx == 1:
+                    p_list_l = list(reversed(p_list_l))
+                    p_list_r = list(reversed(p_list_r))
+                fig["l"].extend(p_list_l)
+                fig["r"].extend(p_list_r)
+            linestrings.append(Polygon(fig["l"]))
+            linestrings.append(Polygon(fig["r"]))
+
+    # linestrings.extend([LineString(line["neg"][0]) for line in lines])
+    # linestrings.extend([LineString(line["neg"][1]) for line in lines])
+    # linestrings.extend([LineString(line["pos"][0]) for line in lines])
+    # linestrings.extend([LineString(line["pos"][1]) for line in lines])
+    return linestrings
 
 
 def conf_point(theta1, theta2):
@@ -213,7 +248,7 @@ def main():
     ax_w, ax_c = init_plot(l1, l2)
 
     # obstacle1_cartesian = Polygon([(8, 15), (10, 15), (10, 18)])
-    obstacle2_cartesian = Polygon([(3, -4), (11, -5), (7, 9), (2, 7)])
+    obstacle2_cartesian = Polygon([(13, -4), (21, -5), (17, 9), (12, 7)])
     # obstacle1_cartesian = Polygon([(2, 7), (7, 9), (10, 5), (3, 4)])
 
 
