@@ -1,4 +1,6 @@
 import dataclasses
+import json
+import random
 from enum import Enum
 
 import numpy as np
@@ -12,10 +14,6 @@ from spaces_operations import check_arm_reach, cartesian_to_config_space, conf_p
     w_obstacle_to_c_obstacle, mod2pi
 
 
-class Direction(Enum):
-    UP = False
-    DOWN = True
-
 class PrmPoint:
     def __init__(self, point: Point):
         self.point = point
@@ -26,7 +24,6 @@ class PrmPoint:
                              Point(point.x + 2 * np.pi, point.y - 2 * np.pi)
                             ]
         self.neighbors = []
-
 
 def generate_prm(obstacles, eps=1.0, n_points=50):
     points = []
@@ -63,7 +60,7 @@ def is_path_admissible(start_point, end_point, obstacles):
     box = MultiLineString([LineString(((-2*np.pi, 0), (4*np.pi, 0))),
                            LineString(((-2*np.pi, 2*np.pi), (4*np.pi, 2*np.pi))),
                            LineString(((0, -2*np.pi), (0, 4*np.pi))),
-                           LineString(((0, -2*np.pi), (0, 4*np.pi)))])
+                           LineString(((2*np.pi, -2*np.pi), (2*np.pi, 4*np.pi)))])
     trajectory_splitted = split(trajectory, box)
     trajectory_normalized_list = []
     for t in trajectory_splitted.geoms:
@@ -95,6 +92,8 @@ def is_point_admissible(point, obstacles):
 
 
 def main():
+    np.random.seed()
+
     x = 3
     y = 7
     l1 = 10
@@ -149,7 +148,6 @@ def main():
                 ax_c.plot(*g.xy, color="black", linewidth=0.3)
                 # ax_c.plot([5, 4], [4, 3])
     plt.show()
-
 
 
 if __name__ == "__main__":
