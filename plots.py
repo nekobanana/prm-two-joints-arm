@@ -1,4 +1,9 @@
+import numpy as np
 from matplotlib import pyplot as plt
+from matplotlib.collections import PatchCollection
+from matplotlib.patches import PathPatch
+from matplotlib.path import Path
+from shapely import Polygon, LineString
 
 
 def plot_obs_in_workspace(ax, obs):
