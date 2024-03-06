@@ -9,21 +9,12 @@ from shapely import MultiPolygon, Point, LineString, intersection, box, MultiLin
 from shapely.geometry import Polygon
 from shapely.ops import split
 
-from plots import init_plot, plot_polygon, plot_arm_in_config_space
+from dijkstra import dijkstra, get_dijkstra_solution_length
+from plots import init_plot, plot_polygon, plot_arm_in_config_space, plot_dijkstra_solution
+from points import PrmPoint
 from spaces_operations import check_arm_reach, cartesian_to_config_space, conf_point, plot_arm_in_workspace, \
     w_obstacle_to_c_obstacle, mod2pi
 
-
-class PrmPoint:
-    def __init__(self, point: Point):
-        self.point = point
-        self.point_copies = [point, Point(point.x - 2 * np.pi, point.y),
-                             Point(point.x + 2 * np.pi, point.y), Point(point.x, point.y - 2*np.pi),
-                             Point(point.x, point.y + 2 * np.pi), Point(point.x - 2 * np.pi, point.y - 2*np.pi),
-                             Point(point.x + 2 * np.pi, point.y + 2 * np.pi), Point(point.x - 2 * np.pi, point.y + 2*np.pi),
-                             Point(point.x + 2 * np.pi, point.y - 2 * np.pi)
-                            ]
-        self.neighbors = []
 
 def generate_prm(obstacles, eps=1.0, n_points=50):
     points = []
@@ -31,17 +22,23 @@ def generate_prm(obstacles, eps=1.0, n_points=50):
         random_point = None
         while not is_point_admissible(random_point, obstacles):
             random_point = Point(np.random.uniform(0, 2*np.pi, 2))
-        point = PrmPoint(random_point)
-        eps_circle = point.point.buffer(eps)
-        for p in points:
-            for pc in p.point_copies:
-                if eps_circle.contains(pc):
-                    path_admissible, trajectory = is_path_admissible(point.point, pc, obstacles)
-                    if path_admissible:
-                        p.neighbors.append((point, trajectory))  # TODO 2pi wrapping
-                        point.neighbors.append((p, reverse(trajectory)))
-        points.append(point)
+        add_point_to_prm(eps, obstacles, points, random_point)
     return points
+
+
+def add_point_to_prm(eps, obstacles, points, random_point):
+    point = PrmPoint(random_point)
+    eps_circle = point.point.buffer(eps)
+    for p in points:
+        for pc in p.point_copies:
+            if eps_circle.contains(pc):
+                path_admissible, trajectory = is_path_admissible(point.point, pc, obstacles)
+                if path_admissible:
+                    p.neighbors.append((point, trajectory))
+                    point.neighbors.append((p, reverse(trajectory)))
+    points.append(point)
+    return point
+
 
 def is_line_below_zero(lineString, coord_number):
     for x in lineString.xy[coord_number]:
@@ -92,18 +89,23 @@ def is_point_admissible(point, obstacles):
 
 
 def main():
-    np.random.seed()
+    np.random.seed(1)
 
     x = 3
     y = 7
     l1 = 10
     l2 = 10
 
+    eps = 1
+    n_points = 50
+
+    x_dest, y_dest = -8, -10
+
     ax_w, ax_c = init_plot(l1, l2)
 
     # obstacle1_cartesian = Polygon([(2, 7), (7, 9), (10, -5), (3, -4)])
     obstacle2_cartesian = Polygon([(8, 15), (10, 15), (10, 18)])
-    # obstacle3_cartesian = Polygon([(13, -4), (21, -5), (17, 9), (12, 7)])
+    obstacle3_cartesian = Polygon([(-10, -4), (-17, -5), (-15, 9), (-9, 7)])
     # obstacle4_cartesian = Polygon([(2, 2), (4, 2), (4, 4), (2, 4)])
 
     if not check_arm_reach(x, y, l1, l2):
@@ -112,22 +114,22 @@ def main():
     config1, config2 = cartesian_to_config_space(x, y, l1, l2)
     config1 = conf_point(config1.x, config1.y)
     config2 = conf_point(config2.x, config2.y)
+    dest_config1, dest_config2 = cartesian_to_config_space(x_dest, y_dest, l1, l2)
+    dest_config1 = conf_point(dest_config1.x, dest_config1.y)
+    dest_config2 = conf_point(dest_config2.x, dest_config2.y)
 
     colormap = plt.colormaps['Set2'].colors
     colormap = np.concatenate((np.array(colormap), 0.5 + np.zeros((len(colormap), 1))), axis=1)
     color = iter(colormap)
     # plot_polygon(ax_w, obstacle1_cartesian, facecolor=next(color))
     plot_polygon(ax_w, obstacle2_cartesian, facecolor=next(color))
-    # plot_polygon(ax_w, obstacle3_cartesian, facecolor=next(color))
+    plot_polygon(ax_w, obstacle3_cartesian, facecolor=next(color))
     # plot_polygon(ax_w, obstacle4_cartesian, facecolor=next(color))
-
-    plot_arm_in_workspace(ax_w, config1.x, l1, x, y)
-    plot_arm_in_workspace(ax_w, config2.x, l1, x, y)
 
     non_admissible_configs_shapes = []
     # non_admissible_configs_shapes.append(w_obstacle_to_c_obstacle(obstacle1_cartesian, l1, l2))
     non_admissible_configs_shapes.append(w_obstacle_to_c_obstacle(obstacle2_cartesian, l1, l2))
-    # non_admissible_configs_shapes.append(w_obstacle_to_c_obstacle(obstacle3_cartesian, l1, l2))
+    non_admissible_configs_shapes.append(w_obstacle_to_c_obstacle(obstacle3_cartesian, l1, l2))
     # non_admissible_configs_shapes.append(w_obstacle_to_c_obstacle(obstacle4_cartesian, l1, l2))
 
     color = iter(colormap)
@@ -138,16 +140,42 @@ def main():
                 plot_polygon(ax_c, g, facecolor=c)
         else:
             plot_polygon(ax_c, o, facecolor=c)
-    plot_arm_in_config_space(ax_c, [config1, config2])
 
-    points = generate_prm(non_admissible_configs_shapes, eps=2, n_points=10)
-    ax_c.scatter([p.point.x for p in points], [p.point.y for p in points])
+
+    points = generate_prm(non_admissible_configs_shapes, eps=eps, n_points=n_points)
+    config1 = add_point_to_prm(eps, non_admissible_configs_shapes, points, config1)
+    config2 = add_point_to_prm(eps, non_admissible_configs_shapes, points, config2)
+    dest_config1 = add_point_to_prm(eps, non_admissible_configs_shapes, points, dest_config1)
+    dest_config2 = add_point_to_prm(eps, non_admissible_configs_shapes, points, dest_config2)
+
+    plot_arm_in_workspace(ax_w, config1.point.x, l1, x, y)
+    plot_arm_in_workspace(ax_w, config2.point.x, l1, x, y)
+    plot_arm_in_workspace(ax_w, dest_config1.point.x, l1, x_dest, y_dest)
+    plot_arm_in_workspace(ax_w, dest_config2.point.x, l1, x_dest, y_dest)
+
+    ax_c.scatter([p.point.x for p in points], [p.point.y for p in points], color="purple")
     for p in points: # TODO controllare linee
-        for n in p.neighbors:
-            for g in n[1].geoms:
+        for n, t in p.neighbors:
+            for g in t.geoms:
                 ax_c.plot(*g.xy, color="black", linewidth=0.3)
-                # ax_c.plot([5, 4], [4, 3])
+
+    plot_arm_in_config_space(ax_c, [config1.point, config2.point])
+    plot_arm_in_config_space(ax_c, [dest_config1.point, dest_config2.point])
+
+    distance_1, previous_1 = dijkstra(points, config1)
+    distance_2, previous_2 = dijkstra(points, config2)
+
+    shortest_path_distance, shortest_path_previous = min([
+        (dest_config1, previous_1),
+        (dest_config2, previous_1),
+        (dest_config1, previous_2),
+        (dest_config2, previous_2),
+    ], key=lambda dp: get_dijkstra_solution_length(*dp))
+
+    plot_dijkstra_solution(ax_c, shortest_path_distance, shortest_path_previous)
+
     plt.show()
+
 
 
 if __name__ == "__main__":

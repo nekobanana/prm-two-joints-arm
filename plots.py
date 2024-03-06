@@ -64,3 +64,11 @@ def plot_polygon(ax, poly, **kwargs):
     ax.add_collection(collection, autolim=True)
     ax.autoscale_view()
     return collection
+
+
+def plot_dijkstra_solution(ax_c, dest_config, previous):
+    p, t = previous[dest_config]
+    while p is not None:
+        for g in t.geoms:
+            ax_c.plot(*g.xy, color="red", linewidth=1)
+        p, t = previous[p]
