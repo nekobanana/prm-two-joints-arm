@@ -1,8 +1,8 @@
 import numpy as np
-from shapely import Point, Polygon, LineString, union_all, GeometryCollection, box
-from shapely.ops import split
+from shapely import Point, Polygon, LineString, union_all, GeometryCollection, box, MultiPolygon
+from shapely.ops import split, unary_union
 
-step = 0.01
+step = 0.005
 
 def w_obstacle_to_c_obstacle(obs, l1, l2):
     non_admissible_configs_arm1 = calc_non_admissible_configs_arm1(obs, l1)
@@ -31,8 +31,10 @@ def w_obstacle_to_c_obstacle(obs, l1, l2):
             except ValueError:
                 pass
         na_configs_arm.extend(shape_splitted_c)
-    non_admissible_configs = union_all(na_configs_arm)
-    return non_admissible_configs
+    # non_admissible_configs = union_all(na_configs_arm)
+    non_admissible_configs = unary_union(na_configs_arm)
+    # non_admissible_configs = MultiPolygon(na_configs_arm)
+    return non_admissible_configs.buffer(step).buffer(-step)
 
 
 def calc_non_admissible_configs_arm1(obs, l1):
