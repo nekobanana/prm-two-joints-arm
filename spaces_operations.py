@@ -1,9 +1,10 @@
 import numpy as np
-from shapely import Point, Polygon, LineString, union_all, GeometryCollection, box, MultiPolygon, MultiLineString, \
+from shapely import Point, Polygon, LineString, GeometryCollection, box, MultiPolygon, MultiLineString, \
     intersection
 from shapely.ops import split, unary_union
 
 step = 0.005
+
 
 def w_obstacle_to_c_obstacle(obs, l1, l2):
     non_admissible_configs_arm1 = calc_non_admissible_configs_arm1(obs, l1)
@@ -41,7 +42,7 @@ def calc_non_admissible_configs_arm1(obs, l1):
 
 
 def calc_non_admissible_configs_arm(obs, center_x, center_y, l, previous_theta):
-    non_admissible_configs = {"neg":[], "pos":[]}
+    non_admissible_configs = {"neg": [], "pos": []}
     transl_coords = np.array(obs.exterior.coords) - np.array([center_x, center_y])
     rot_matrix = np.array(
         [[np.cos(previous_theta), np.sin(previous_theta)],
@@ -52,10 +53,10 @@ def calc_non_admissible_configs_arm(obs, center_x, center_y, l, previous_theta):
     l_circle = Point(0, 0).buffer(l)
     obs_splitted = split(obs, splitter)
     for idx, o in enumerate(obs_splitted.geoms):
-        intersection = l_circle.intersection(o)
-        if intersection.is_empty:
+        intersection_p = l_circle.intersection(o)
+        if intersection_p.is_empty:
             continue
-        l_intersection_coord = intersection.boundary.coords
+        l_intersection_coord = intersection_p.boundary.coords
         angles = []
         for point in l_intersection_coord:
             angle = np.arctan(point[1] / point[0])
@@ -116,12 +117,12 @@ def calc_non_admissible_configs_arm2(obs, l1, l2, non_admissible_configs_arm1):
                 i = 0
                 for i, p2 in enumerate(p_it):
                     d_2 = np.linalg.norm(np.array(p2) - np.array(p1))
-                    if d_2 > 5 * d_1: # numero a caso
+                    if d_2 > 5 * d_1:  # numero a caso
                         break
                     d_1 = d_2
                     p1 = p2
-                p_list_l = points[:i+1]
-                p_list_r = points[i+1:]
+                p_list_l = points[:i + 1]
+                p_list_r = points[i + 1:]
                 if idx == 1:
                     p_list_l = list(reversed(p_list_l))
                     p_list_r = list(reversed(p_list_r))
@@ -176,6 +177,7 @@ def get_arm1_position(theta1, l1):
 def check_arm_reach(x, y, l1, l2):
     return (x ** 2 + y ** 2) <= (l1 + l2) ** 2
 
+
 def conf_space_to_arm_position(theta1, theta2, l1, l2):
     x1, y1 = l1 * np.cos(theta1), l1 * np.sin(theta1)
     theta_tot = mod2pi(theta2 + theta1)
@@ -184,12 +186,12 @@ def conf_space_to_arm_position(theta1, theta2, l1, l2):
     return (x1, y1), (x, y)
 
 
-def is_path_admissible(start_point, end_point, obstacles):
+def get_path_if_admissible(start_point, end_point, obstacles):
     trajectory = LineString((start_point, end_point))
-    box = MultiLineString([LineString(((-2*np.pi, 0), (4*np.pi, 0))),
-                           LineString(((-2*np.pi, 2*np.pi), (4*np.pi, 2*np.pi))),
-                           LineString(((0, -2*np.pi), (0, 4*np.pi))),
-                           LineString(((2*np.pi, -2*np.pi), (2*np.pi, 4*np.pi)))])
+    box = MultiLineString([LineString(((-2 * np.pi, 0), (4 * np.pi, 0))),
+                           LineString(((-2 * np.pi, 2 * np.pi), (4 * np.pi, 2 * np.pi))),
+                           LineString(((0, -2 * np.pi), (0, 4 * np.pi))),
+                           LineString(((2 * np.pi, -2 * np.pi), (2 * np.pi, 4 * np.pi)))])
     trajectory_splitted = split(trajectory, box)
     trajectory_normalized_list = []
     for t in trajectory_splitted.geoms:
@@ -203,6 +205,22 @@ def is_path_admissible(start_point, end_point, obstacles):
         elif is_line_over_2pi(t, 1):
             coords = [(x, y - 2 * np.pi) for x, y in t.coords]
         trajectory_normalized_list.append(LineString(coords))
+
+    # first_segment, middle_segment, last_segment = None, None, None
+    # for t in trajectory_normalized_list:
+    #     if (mod2pi(start_point.coords[0][0]), mod2pi(start_point.coords[0][1])) in t.coords:
+    #         first_segment = t
+    #     elif (mod2pi(end_point.coords[0][0]), mod2pi(end_point.coords[0][1])) in t.coords:
+    #         last_segment = t
+    #     else:
+    #         middle_segment = t
+    # trajectory_ordered = [first_segment]
+    # if middle_segment is not None:
+    #     trajectory_ordered.append(middle_segment)
+    # if last_segment is not None:
+    #     trajectory_ordered.append(last_segment)
+    # trajectory_normalized = MultiLineString(trajectory_ordered)
+
     trajectory_normalized = MultiLineString(trajectory_normalized_list)
     for obs in obstacles:
         if not intersection(trajectory_normalized, obs).is_empty:
@@ -225,8 +243,9 @@ def is_line_below_zero(lineString, coord_number):
             return True
     return False
 
+
 def is_line_over_2pi(lineString, coord_number):
     for x in lineString.xy[coord_number]:
-        if x > 2*np.pi:
+        if x > 2 * np.pi:
             return True
     return False

@@ -51,11 +51,8 @@ def get_solution_lines(dest_config, previous):
     while p is not None:
         lines.append(t)
         p, t = previous[p]
-    lines.reverse()
-    reversed = []
-    for line in lines:
-        reversed_geoms = list(line.geoms)
-        reversed_geoms.reverse()
-        for g in reversed_geoms:
-            reversed.append(g.reverse())
-    return MultiLineString(reversed)
+    reversed_list = []
+    for line in reversed(lines):
+        for g in reversed(list(line.geoms)):
+            reversed_list.append(g.reverse())
+    return MultiLineString(reversed_list)

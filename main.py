@@ -1,3 +1,5 @@
+from random import randint
+
 import numpy as np
 from matplotlib import pyplot as plt, animation
 from shapely import MultiPolygon
@@ -12,8 +14,12 @@ from spaces_operations import check_arm_reach, cartesian_to_config_space, conf_p
 
 
 def main():
-    np.random.seed()
-    print(f"np seed: {np.random.get_state()[1][0]}\n")
+    seed = None
+    # seed = 669717558
+    if seed is None:
+        seed = randint(0, 10**9)
+    print(f"{seed=}")
+    np.random.seed(seed)
 
     x, y = -3, 7
     x_dest, y_dest = -8, -10

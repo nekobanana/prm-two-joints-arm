@@ -1,27 +1,8 @@
-"""
-function dijkstra(G, S)
-    for each vertex V in G
-        distance[V] <- infinite
-        previous[V] <- NULL
-        If V != S, add V to Priority Queue Q
-    distance[S] <- 0
-
-    while Q IS NOT EMPTY
-        U <- Extract MIN from Q
-        for each unvisited neighbour V of U
-            tempDistance <- distance[U] + edge_weight(U, V)
-            if tempDistance < distance[V]
-                distance[V] <- tempDistance
-                previous[V] <- U
-    return distance[], previous[]
-"""
-from queue import PriorityQueue
-
 import numpy as np
-from shapely import Point, reverse
+from shapely import Point, reverse, MultiLineString
 
 from points import PrmPoint
-from spaces_operations import is_point_admissible, is_path_admissible
+from spaces_operations import is_point_admissible, get_path_if_admissible
 
 
 def dijkstra(points: list[PrmPoint], source: PrmPoint):
@@ -71,9 +52,13 @@ def add_point_to_prm(eps, obstacles, points, random_point):
     for p in points:
         for pc in p.point_copies:
             if eps_circle.contains(pc):
-                path_admissible, trajectory = is_path_admissible(point.point, pc, obstacles)
+                path_admissible, trajectory = get_path_if_admissible(point.point, pc, obstacles)
                 if path_admissible:
                     p.neighbors.append((point, trajectory))
-                    point.neighbors.append((p, reverse(trajectory)))
+                    geom_reversed = list(reversed(trajectory.geoms))
+                    trajectory_reversed_list = []
+                    for g in geom_reversed:
+                        trajectory_reversed_list.append(g.reverse())
+                    point.neighbors.append((p, MultiLineString(trajectory_reversed_list)))
     points.append(point)
     return point
