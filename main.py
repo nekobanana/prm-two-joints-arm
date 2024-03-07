@@ -92,23 +92,23 @@ def is_point_admissible(point, obstacles):
 def main():
     np.random.seed(1)
 
-    x = 3
-    y = 5
-    l1 = 10
+    x, y = -3, 7
+    x_dest, y_dest = -8, -10
+
+    l1 = 15
     l2 = 10
 
     eps = 1
     n_points = 50
 
-    x_dest, y_dest = -8, -10
-
     ax_w, ax_c = init_plot(l1, l2)
 
-    # obstacle1_cartesian = Polygon([(2, 7), (7, 9), (10, -5), (3, -4)])
-    obstacle2_cartesian = Polygon([(8, 15), (10, 15), (10, 18)])
-    obstacle3_cartesian = Polygon([(-10, -4), (-17, -5), (-15, 9), (-9, 7)])
-    # obstacle4_cartesian = Polygon([(2, 2), (4, 2), (4, 4), (2, 4)])
-    obstacles = [obstacle2_cartesian, obstacle3_cartesian]
+    obstacles = [
+        # Polygon([(2, 7), (7, 9), (10, -5), (3, -4)]),
+        Polygon([(8, 15), (10, 15), (10, 18)]),
+        Polygon([(-10, -4), (-17, -5), (-15, 9), (-9, 7)]),
+        # Polygon([(2, 2), (4, 2), (4, 4), (2, 4)]),
+    ]
     if not check_arm_reach(x, y, l1, l2):
         print("Point is outside arm length")
         return
@@ -148,11 +148,24 @@ def main():
     plot_arm_in_workspace(ax_w, config2.point.x, l1, x, y)
     plot_arm_in_workspace(ax_w, dest_config1.point.x, l1, x_dest, y_dest)
     plot_arm_in_workspace(ax_w, dest_config2.point.x, l1, x_dest, y_dest)
+    ax_w.annotate("start", (x + 1, y - 0.5))
+    ax_w.annotate("goal", (x_dest + 1, y_dest - 0.5))
 
     plot_graph(ax_c, points)
 
     plot_arm_in_config_space(ax_c, [config1.point, config2.point])
     plot_arm_in_config_space(ax_c, [dest_config1.point, dest_config2.point])
+
+    if (not is_point_admissible(config1.point, non_admissible_configs_shapes)
+            and not is_point_admissible(config2.point, non_admissible_configs_shapes)):
+        print("Start configuration is not admissible")
+        plt.show()
+        return
+    if (not is_point_admissible(dest_config1.point, non_admissible_configs_shapes)
+            and not is_point_admissible(dest_config2.point, non_admissible_configs_shapes)):
+        print("Goal configuration is not admissible")
+        plt.show()
+        return
 
     distance_1, previous_1 = dijkstra(points, config1)
     distance_2, previous_2 = dijkstra(points, config2)
@@ -165,6 +178,11 @@ def main():
     ], key=lambda dp: get_dijkstra_solution_length(*dp))
 
     solution_line = get_solution_lines(shortest_path_distance, shortest_path_previous)
+    if solution_line.is_empty:
+        print("No solution found")
+        plt.show()
+        return
+
     plot_dijkstra_solution(ax_c, solution_line)
     plt.show()
 
@@ -178,7 +196,7 @@ def main():
     for obstacle in obstacles:
         plot_polygon(anim_ax, obstacle, facecolor=next(color))
 
-    solution_steps_discretized = discretize_lines(solution_line, 0.1)
+    solution_steps_discretized = discretize_lines(solution_line, 0.05)
     arm1_pos_x = []
     arm1_pos_y = []
     arm2_pos_x = []
@@ -195,7 +213,7 @@ def main():
         arm2_pos_x.append(arm2_pos[0])
         arm2_pos_y.append(arm2_pos[1])
 
-    line = anim_ax.plot([], [], lw=2)
+    line = anim_ax.plot([], [], lw=3, color="purple")
     def animate(i):
         thisx = [0, arm1_pos_x[i], arm2_pos_x[i]]
         thisy = [0, arm1_pos_y[i], arm2_pos_y[i]]
@@ -203,21 +221,13 @@ def main():
         return line
 
     ani = animation.FuncAnimation(
-        fig, animate, len(arm1_pos_x), interval=10, blit=True)
-    ani.save('animation.mp4')
+        fig, animate, len(arm1_pos_x), interval=20, blit=True)
+    ani.save('animation.mp4', dpi=200)
 
 def conf_space_to_arm_position(theta1, theta2, l1, l2):
     x1, y1 = l1 * np.cos(theta1), l1 * np.sin(theta1)
-    # if np.pi < theta1 < 2*np.pi:
-    #     x1 = -x1
-    # if 1/2*np.pi < theta1 < 3/2*np.pi:
-    #     y1 = -y1
     theta_tot = mod2pi(theta2 + theta1)
     x2, y2 = l2 * np.cos(theta_tot), l2 * np.sin(theta_tot)
-    # if np.pi < theta_tot < 2*np.pi:
-    #     x2 = -x2
-    # if 1/2*np.pi < theta_tot < 3/2*np.pi:
-    #     y2 = -y2
     x, y = x1 + x2, y1 + y2
     return (x1, y1), (x, y)
 def discretize_lines(lines, discr_step):
