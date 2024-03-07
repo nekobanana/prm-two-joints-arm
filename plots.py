@@ -17,6 +17,7 @@ def plot_arm_in_config_space(ax, points):
     for p in points:
         ax.scatter(p.x, p.y, s=10)
 
+
 def debug_plot(l, obs):
     fig, ax = plt.subplots(1, 1)
     ax_limit = l
@@ -29,6 +30,8 @@ def debug_plot(l, obs):
     ax.set_ylabel("y")
     plot_obs_in_workspace(ax, obs)
     plt.show()
+
+
 def init_plot(l1, l2):
     fig, (ax1, ax2) = plt.subplots(1, 2)
     init_workspace_ax(ax1, l1, l2)
@@ -64,22 +67,15 @@ def plot_polygon(ax, poly, **kwargs):
 
     patch = PathPatch(path, **kwargs)
     collection = PatchCollection([patch], **kwargs)
-
     ax.add_collection(collection, autolim=True)
     ax.autoscale_view()
     return collection
 
 
-# def plot_dijkstra_solution(ax_c, dest_config, previous):
-#     p, t = previous[dest_config]
-#     while p is not None:
-#         for g in t.geoms:
-#             ax_c.plot(*g.xy, color="red", linewidth=1)
-#         p, t = previous[p]
-
 def plot_dijkstra_solution(ax_c, solution_line):
     for g in solution_line.geoms:
         ax_c.plot(*g.xy, color="red", linewidth=1)
+
 
 def plot_graph(ax_c, points):
     ax_c.scatter([p.point.x for p in points], [p.point.y for p in points], color="purple", s=5)

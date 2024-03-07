@@ -1,5 +1,6 @@
 import numpy as np
-from shapely import Point, Polygon, LineString, union_all, GeometryCollection, box, MultiPolygon
+from shapely import Point, Polygon, LineString, union_all, GeometryCollection, box, MultiPolygon, MultiLineString, \
+    intersection
 from shapely.ops import split, unary_union
 
 step = 0.005
@@ -175,3 +176,57 @@ def get_arm1_position(theta1, l1):
 def check_arm_reach(x, y, l1, l2):
     return (x ** 2 + y ** 2) <= (l1 + l2) ** 2
 
+def conf_space_to_arm_position(theta1, theta2, l1, l2):
+    x1, y1 = l1 * np.cos(theta1), l1 * np.sin(theta1)
+    theta_tot = mod2pi(theta2 + theta1)
+    x2, y2 = l2 * np.cos(theta_tot), l2 * np.sin(theta_tot)
+    x, y = x1 + x2, y1 + y2
+    return (x1, y1), (x, y)
+
+
+def is_path_admissible(start_point, end_point, obstacles):
+    trajectory = LineString((start_point, end_point))
+    box = MultiLineString([LineString(((-2*np.pi, 0), (4*np.pi, 0))),
+                           LineString(((-2*np.pi, 2*np.pi), (4*np.pi, 2*np.pi))),
+                           LineString(((0, -2*np.pi), (0, 4*np.pi))),
+                           LineString(((2*np.pi, -2*np.pi), (2*np.pi, 4*np.pi)))])
+    trajectory_splitted = split(trajectory, box)
+    trajectory_normalized_list = []
+    for t in trajectory_splitted.geoms:
+        coords = t.coords
+        if is_line_below_zero(t, 0):
+            coords = [(2 * np.pi + x, y) for x, y in t.coords]
+        elif is_line_over_2pi(t, 0):
+            coords = [(x - 2 * np.pi, y) for x, y in t.coords]
+        if is_line_below_zero(t, 1):
+            coords = [(x, 2 * np.pi + y) for x, y in t.coords]
+        elif is_line_over_2pi(t, 1):
+            coords = [(x, y - 2 * np.pi) for x, y in t.coords]
+        trajectory_normalized_list.append(LineString(coords))
+    trajectory_normalized = MultiLineString(trajectory_normalized_list)
+    for obs in obstacles:
+        if not intersection(trajectory_normalized, obs).is_empty:
+            return False, None
+    return True, trajectory_normalized
+
+
+def is_point_admissible(point, obstacles):
+    if point is None:
+        return False
+    for obs in obstacles:
+        if obs.contains(point):
+            return False
+    return True
+
+
+def is_line_below_zero(lineString, coord_number):
+    for x in lineString.xy[coord_number]:
+        if x < 0:
+            return True
+    return False
+
+def is_line_over_2pi(lineString, coord_number):
+    for x in lineString.xy[coord_number]:
+        if x > 2*np.pi:
+            return True
+    return False

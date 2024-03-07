@@ -18,8 +18,10 @@ function dijkstra(G, S)
 from queue import PriorityQueue
 
 import numpy as np
+from shapely import Point, reverse
 
 from points import PrmPoint
+from spaces_operations import is_point_admissible, is_path_admissible
 
 
 def dijkstra(points: list[PrmPoint], source: PrmPoint):
@@ -44,7 +46,6 @@ def dijkstra(points: list[PrmPoint], source: PrmPoint):
     return distance, previous
 
 
-
 def get_dijkstra_solution_length(dest_config, previous) -> float:
     l = 0
     p, t = previous[dest_config]
@@ -52,3 +53,27 @@ def get_dijkstra_solution_length(dest_config, previous) -> float:
         l += t.length
         p, t = previous[p]
     return l if l > 0 else np.inf
+
+
+def generate_prm(obstacles, eps=1.0, n_points=50):
+    points = []
+    for i in range(n_points):
+        random_point = None
+        while not is_point_admissible(random_point, obstacles):
+            random_point = Point(np.random.uniform(0, 2 * np.pi, 2))
+        add_point_to_prm(eps, obstacles, points, random_point)
+    return points
+
+
+def add_point_to_prm(eps, obstacles, points, random_point):
+    point = PrmPoint(random_point)
+    eps_circle = point.point.buffer(eps)
+    for p in points:
+        for pc in p.point_copies:
+            if eps_circle.contains(pc):
+                path_admissible, trajectory = is_path_admissible(point.point, pc, obstacles)
+                if path_admissible:
+                    p.neighbors.append((point, trajectory))
+                    point.neighbors.append((p, reverse(trajectory)))
+    points.append(point)
+    return point
