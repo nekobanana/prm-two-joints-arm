@@ -31,9 +31,7 @@ def w_obstacle_to_c_obstacle(obs, l1, l2):
             except ValueError:
                 pass
         na_configs_arm.extend(shape_splitted_c)
-    # non_admissible_configs = union_all(na_configs_arm)
     non_admissible_configs = unary_union(na_configs_arm)
-    # non_admissible_configs = MultiPolygon(na_configs_arm)
     return non_admissible_configs.buffer(step).buffer(-step)
 
 
@@ -148,8 +146,8 @@ def cartesian_to_config_space(x, y, l1, l2):
         config1, config2 = _cartesian_to_config_space_x_pos(x, y, l1, l2)
     else:
         config1, config2 = _cartesian_to_config_space_x_pos(-x, y, l1, l2)
-        config1 = np.pi - np.array([config1.x, config1.y])
-        config2 = np.pi - np.array([config2.x, config2.y])
+        config1 = np.array([np.pi, 0]) - np.array([config1.x, config1.y])
+        config2 = np.array([np.pi, 0]) - np.array([config2.x, config2.y])
     return Point(config1), Point(config2)
 
 

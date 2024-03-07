@@ -15,7 +15,7 @@ def plot_obs_in_workspace(ax, obs):
 
 def plot_arm_in_config_space(ax, points):
     for p in points:
-        ax.scatter(p.x, p.y)
+        ax.scatter(p.x, p.y, s=10)
 
 def debug_plot(l, obs):
     fig, ax = plt.subplots(1, 1)
@@ -31,14 +31,7 @@ def debug_plot(l, obs):
     plt.show()
 def init_plot(l1, l2):
     fig, (ax1, ax2) = plt.subplots(1, 2)
-    ax1_limit = l1 + l2
-    ax1.set_aspect('equal', adjustable='box')
-    ax1.axhline(y=0, color='k', linewidth=1)
-    ax1.axvline(x=0, color='k', linewidth=1)
-    ax1.set(xlim=(-ax1_limit, ax1_limit), ylim=(-ax1_limit, ax1_limit))
-    ax1.set_title("Workspace")
-    ax1.set_xlabel("x")
-    ax1.set_ylabel("y")
+    init_workspace_ax(ax1, l1, l2)
     ax2.set_title("Configuration space")
     ax2.set_xlabel("theta1")
     ax2.set_ylabel("theta2")
@@ -50,6 +43,17 @@ def init_plot(l1, l2):
     ax2.set_yticks(ticks, labels)
 
     return ax1, ax2
+
+
+def init_workspace_ax(ax1, l1, l2):
+    ax1_limit = l1 + l2
+    ax1.set_aspect('equal', adjustable='box')
+    ax1.axhline(y=0, color='k', linewidth=1)
+    ax1.axvline(x=0, color='k', linewidth=1)
+    ax1.set(xlim=(-ax1_limit, ax1_limit), ylim=(-ax1_limit, ax1_limit))
+    ax1.set_title("Workspace")
+    ax1.set_xlabel("x")
+    ax1.set_ylabel("y")
 
 
 # Plots a Polygon to pyplot `ax`
@@ -66,9 +70,20 @@ def plot_polygon(ax, poly, **kwargs):
     return collection
 
 
-def plot_dijkstra_solution(ax_c, dest_config, previous):
-    p, t = previous[dest_config]
-    while p is not None:
-        for g in t.geoms:
-            ax_c.plot(*g.xy, color="red", linewidth=1)
-        p, t = previous[p]
+# def plot_dijkstra_solution(ax_c, dest_config, previous):
+#     p, t = previous[dest_config]
+#     while p is not None:
+#         for g in t.geoms:
+#             ax_c.plot(*g.xy, color="red", linewidth=1)
+#         p, t = previous[p]
+
+def plot_dijkstra_solution(ax_c, solution_line):
+    for g in solution_line.geoms:
+        ax_c.plot(*g.xy, color="red", linewidth=1)
+
+def plot_graph(ax_c, points):
+    ax_c.scatter([p.point.x for p in points], [p.point.y for p in points], color="purple", s=5)
+    for p in points:
+        for n, t in p.neighbors:
+            for g in t.geoms:
+                ax_c.plot(*g.xy, color="black", linewidth=0.3)
