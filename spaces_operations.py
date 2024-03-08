@@ -59,7 +59,10 @@ def calc_non_admissible_configs_arm(obs, center_x, center_y, l, previous_theta):
         l_intersection_coord = intersection_p.boundary.coords
         angles = []
         for point in l_intersection_coord:
-            angle = np.arctan(point[1] / point[0])
+            if point[0] != 0:
+                angle = np.arctan(point[1] / point[0])
+            else:
+                angle = np.pi/2 if point[1] > 0 else -np.pi/2
             if point[0] < 0:
                 angle = angle + np.pi
             angles.append(mod2pi(angle))
