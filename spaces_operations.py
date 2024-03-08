@@ -205,22 +205,6 @@ def get_path_if_admissible(start_point, end_point, obstacles):
         elif is_line_over_2pi(t, 1):
             coords = [(x, y - 2 * np.pi) for x, y in t.coords]
         trajectory_normalized_list.append(LineString(coords))
-
-    # first_segment, middle_segment, last_segment = None, None, None
-    # for t in trajectory_normalized_list:
-    #     if (mod2pi(start_point.coords[0][0]), mod2pi(start_point.coords[0][1])) in t.coords:
-    #         first_segment = t
-    #     elif (mod2pi(end_point.coords[0][0]), mod2pi(end_point.coords[0][1])) in t.coords:
-    #         last_segment = t
-    #     else:
-    #         middle_segment = t
-    # trajectory_ordered = [first_segment]
-    # if middle_segment is not None:
-    #     trajectory_ordered.append(middle_segment)
-    # if last_segment is not None:
-    #     trajectory_ordered.append(last_segment)
-    # trajectory_normalized = MultiLineString(trajectory_ordered)
-
     trajectory_normalized = MultiLineString(trajectory_normalized_list)
     for obs in obstacles:
         if not intersection(trajectory_normalized, obs).is_empty:
