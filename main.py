@@ -21,11 +21,11 @@ def main():
     print(f"{seed=}")
     np.random.seed(seed)
 
-    x, y = -3, 7
-    x_dest, y_dest = -8, -10
+    x, y = 4, 4
+    x_dest, y_dest = 7, 4
 
     l1 = 8
-    l2 = 10
+    l2 = 5
 
     eps = 1
     n_points = 50
@@ -38,15 +38,26 @@ def main():
         # Polygon([(2, 2), (4, 2), (4, 4), (2, 4)]),
     ]
     if not check_arm_reach(x, y, l1, l2):
-        print("Point is outside arm length")
+        print("Starting point is outside arm length")
+        return
+    if not check_arm_reach(x_dest, y_dest, l1, l2):
+        print("Goal point is outside arm length")
         return
 
     ax_w, ax_c = init_plot(l1, l2)
 
-    config1, config2 = cartesian_to_config_space(x, y, l1, l2)
+    try:
+        config1, config2 = cartesian_to_config_space(x, y, l1, l2)
+    except ValueError:
+        print("Starting point cannot be reached")
+        return
     config1 = conf_point(config1.x, config1.y)
     config2 = conf_point(config2.x, config2.y)
-    dest_config1, dest_config2 = cartesian_to_config_space(x_dest, y_dest, l1, l2)
+    try:
+        dest_config1, dest_config2 = cartesian_to_config_space(x_dest, y_dest, l1, l2)
+    except ValueError:
+        print("Goal point cannot be reached")
+        return
     dest_config1 = conf_point(dest_config1.x, dest_config1.y)
     dest_config2 = conf_point(dest_config2.x, dest_config2.y)
 

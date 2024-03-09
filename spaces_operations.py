@@ -158,6 +158,8 @@ def cartesian_to_config_space(x, y, l1, l2):
 
 def _cartesian_to_config_space_x_pos(x, y, l1, l2):
     cos_theta2 = (x ** 2 + y ** 2 - l1 ** 2 - l2 ** 2) / (2 * l1 * l2)
+    if cos_theta2 > 1 or cos_theta2 < -1:
+        raise ValueError("cos(theta2) must be between -1 and 1")
     theta2_pos = np.arccos(cos_theta2)
     theta2_neg = -theta2_pos
     theta1_pos = np.arctan(y / x) - np.arctan(
