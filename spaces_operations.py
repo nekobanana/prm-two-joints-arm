@@ -3,10 +3,20 @@ from shapely import Point, Polygon, LineString, GeometryCollection, box, MultiPo
     intersection
 from shapely.ops import split, unary_union
 
+# discretization step for theta1 when computing
+# the obstacle representation in the config space
 step = 0.005
 
 
 def w_obstacle_to_c_obstacle(obs, l1, l2):
+    """
+    obs: Polygon
+    l1, l2: arm lengths
+
+    Returns a Polygon or MultiPolygon representing
+    the obstacle obs in the configuration space.
+    Please don't go through the code, it's ugly
+    """
     non_admissible_configs_arm1 = calc_non_admissible_configs_arm1(obs, l1)
     non_admissible_configs_arm2 = calc_non_admissible_configs_arm2(obs, l1, l2, non_admissible_configs_arm1)
     na_configs_arm = []
@@ -54,7 +64,7 @@ def calc_non_admissible_configs_arm(obs, center_x, center_y, l, previous_theta):
     obs_splitted = split(obs, splitter)
     for idx, o in enumerate(obs_splitted.geoms):
         intersection_p = l_circle.intersection(o)
-        if intersection_p.is_empty:
+        if intersection_p.is_empty or intersection_p.boundary.is_empty:
             continue
         l_intersection_coord = intersection_p.boundary.coords
         angles = []
@@ -139,6 +149,9 @@ def calc_non_admissible_configs_arm2(obs, l1, l2, non_admissible_configs_arm1):
 
 
 def conf_point(theta1, theta2):
+    """
+    Normalizes the points in [0, 2pi) interval
+    """
     return Point(mod2pi(theta1), mod2pi(theta2))
 
 
@@ -147,6 +160,17 @@ def mod2pi(theta):
 
 
 def cartesian_to_config_space(x, y, l1, l2):
+    """
+    x, y: coordinates of the arm in the cartesian space
+    l1, l2: arm lengths
+
+    Returns a tuple of two points (Point) in the
+    configuration space corresponding to the two
+    possible configurations of the arm for (x, y).
+    Works only for l1 >= l2.
+    For l1 < l2 there is a non managed case in cartesian_to_config_space function
+    (see the comment in _cartesian_to_config_space_x_pos)
+    """
     if x > 0:
         config1, config2 = _cartesian_to_config_space_x_pos(x, y, l1, l2)
     else:
@@ -162,10 +186,11 @@ def _cartesian_to_config_space_x_pos(x, y, l1, l2):
         raise ValueError("cos(theta2) must be between -1 and 1")
     theta2_pos = np.arccos(cos_theta2)
     theta2_neg = -theta2_pos
+    # here there's a bug when (l1 + l2 * np.cos(theta2_pos)) is negative
     theta1_pos = np.arctan(y / x) - np.arctan(
         (l2 * np.sin(theta2_pos)) / (l1 + l2 * np.cos(theta2_pos)))
     theta1_neg = np.arctan(y / x) + np.arctan(
-        (l2 * np.sin(theta2_pos)) / (l1 + l2 * np.cos(theta2_pos)))  # non dovrebbe essere theta2_neg in questa formula?
+        (l2 * np.sin(theta2_pos)) / (l1 + l2 * np.cos(theta2_pos)))
     return Point(theta1_pos, theta2_pos), Point(theta1_neg, theta2_neg)
 
 
@@ -180,6 +205,12 @@ def get_arm1_position(theta1, l1):
 
 
 def check_arm_reach(x, y, l1, l2):
+    """
+    Checks if the point is within the maximum extension
+    of the arm.
+    Mind that this does NOT check if the point is
+
+    """
     return (x ** 2 + y ** 2) <= (l1 + l2) ** 2
 
 

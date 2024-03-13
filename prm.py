@@ -37,6 +37,17 @@ def get_dijkstra_solution_length(dest_config, previous) -> float:
 
 
 def generate_prm(obstacles, eps=1.0, n_points=50):
+    """
+    obstacles: list of Polygon or MultiPolygon representing
+    the obstacles in the configuration space
+    eps: the max distance for a point in order to be
+    connected to a neighbor
+    n_points: the number of admissible points that are generated.
+
+    Returns the PRM graph representation in the form of
+    a list of n_points points (PrmPoint).
+
+    """
     points = []
     for i in range(n_points):
         random_point = None
@@ -47,6 +58,19 @@ def generate_prm(obstacles, eps=1.0, n_points=50):
 
 
 def add_point_to_prm(eps, obstacles, points, random_point):
+    """
+    obstacles: list of Polygon or MultiPolygon representing
+    the obstacles in the configuration space
+    eps: the max distance for a point in order to be
+    connected to a neighbor
+    points: the PRM graph (list of PrmPoint)
+    random_point: the point to be added to the graph
+
+    Adds the point random_point to the graph (list of graph points).
+    A connection between two points is made if their
+    distance is <= eps and if the segment that connects
+    the two doesn't intersect with an obstacle
+    """
     point = PrmPoint(random_point)
     eps_circle = point.point.buffer(eps)
     for p in points:

@@ -3,6 +3,12 @@ from shapely import Point, LineString, MultiLineString
 
 
 class PrmPoint:
+    """
+    Class that represents a point in the PRM graph.
+    self.neighbors is the adjacency list. It's a list
+    of tuple[PrmPoint, MultiLineString] of a connected
+    point and the path to get to that point
+    """
     def __init__(self, point: Point):
         self.point = point
         self.point_copies = [point, Point(point.x - 2 * np.pi, point.y),
@@ -16,7 +22,12 @@ class PrmPoint:
 
 
 def cut_line(line, distance, lines):
-    # Cuts a line in several segments at a distance from its starting point
+    """
+    Cuts a line in several segments at a distance from its starting point
+
+    I copied this function from Stack Overflow.
+    It's recursive so sometimes it could give a SIGSEGV
+    """
     if distance <= 0.0 or distance >= line.length:
         return [LineString(line)]
     coords = list(line.coords)
